@@ -1,7 +1,7 @@
 # To allow users to use arrow keys in the REPL.
 import readline  # noqa: F401
 import sys
-
+import os 
 import typer
 from click import BadArgumentUsage, MissingParameter
 from click.types import Choice
@@ -75,18 +75,32 @@ def main(
     ),
     show_chat: str = typer.Option(
         None,
+        '--show-chat', 
+        '-sc',
         help="Show all messages from provided chat id.",
         callback=ChatHandler.show_messages_callback,
         rich_help_panel="Chat Options",
     ),
     list_chats: bool = typer.Option(
         False,
+        '--list-chat', 
+        '-lc',
         help="List all existing chat ids.",
         callback=ChatHandler.list_ids,
         rich_help_panel="Chat Options",
     ),
+    
+    last_chat: bool = typer.Option(
+        False,
+        '--last-chat', 
+        '-last',
+        help="Use most recent chat id.",
+        rich_help_panel="Chat Options",
+    ),
     role: str = typer.Option(
         None,
+        '--role', 
+        '-r',
         help="System role for GPT model.",
         rich_help_panel="Role Options",
     ),
@@ -119,14 +133,14 @@ def main(
 
     if stdin_passed and not repl:
         prompt = f"{sys.stdin.read()}\n\n{prompt or ''}"
-
+    
     if not prompt and not editor and not repl:
         raise MissingParameter(param_hint="PROMPT", param_type="string")
 
     if sum((shell, describe_shell, code)) > 1:
         raise BadArgumentUsage(
             "Only one of --shell, --describe-shell, and --code options can be used at a time."
-        )
+        )   
 
     if chat and repl:
         raise BadArgumentUsage("--chat and --repl options cannot be used together.")
@@ -164,13 +178,39 @@ def main(
             caching=cache,
         )
     else:
-        full_completion = DefaultHandler(role_class).handle(
-            prompt,
-            model=model,
-            temperature=temperature,
-            top_probability=top_probability,
-            caching=cache,
-        )
+
+        if cfg.get('CHAT_LOG_ALL') == "true":
+                
+            # get the filenames of the most recent files in the chat_cache 
+            chat_ids = os.listdir(cfg.get('CHAT_CACHE_PATH'))            
+            # Filter chat_ids to include only filenames in the format '<int>'
+            chat_ids = [int(chat_id) for chat_id in chat_ids if chat_id.isdigit()]
+            # Get the highest value numeric chat_id and increment it
+            highest_chat_id = max(chat_ids)
+            new_chat = str(highest_chat_id + 1)
+
+            if last_chat:
+                chat = str(highest_chat_id)
+            else:
+                chat = str(highest_chat_id + 1)
+                
+            full_completion = ChatHandler(chat, role_class).handle(
+                prompt,
+                model=model,
+                temperature=temperature,
+                top_probability=top_probability,
+                chat_id=chat,
+                caching=cache,
+            )
+        else:
+            
+            full_completion = DefaultHandler(role_class).handle(
+                prompt,
+                model=model,
+                temperature=temperature,
+                top_probability=top_probability,
+                caching=cache,
+            )
 
     while shell and not stdin_passed:
         option = typer.prompt(

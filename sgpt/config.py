@@ -27,8 +27,9 @@ DEFAULT_CONFIG = {
     "ROLE_STORAGE_PATH": os.getenv("ROLE_STORAGE_PATH", str(ROLE_STORAGE_PATH)),
     "SYSTEM_ROLES": os.getenv("SYSTEM_ROLES", "false"),
     "DEFAULT_EXECUTE_SHELL_CMD": os.getenv("DEFAULT_EXECUTE_SHELL_CMD", "false"),
-    "DISABLE_STREAMING": os.getenv("DISABLE_STREAMING", "false")
+    "DISABLE_STREAMING": os.getenv("DISABLE_STREAMING", "false"),
     # New features might add their own config variables here.
+    "CHAT_LOG_ALL": os.getenv("CHAT_LOG_ALL", "true"),
 }
 
 
