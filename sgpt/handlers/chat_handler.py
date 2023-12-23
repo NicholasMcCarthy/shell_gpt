@@ -8,6 +8,9 @@ from click import BadArgumentUsage
 from ..config import cfg
 from ..role import SystemRole
 from .handler import Handler
+from TTS.utils.manage import ModelManager
+from TTS.utils.synthesizer import Synthesizer
+import site
 
 CHAT_CACHE_LENGTH = int(cfg.get("CHAT_CACHE_LENGTH"))
 CHAT_CACHE_PATH = Path(cfg.get("CHAT_CACHE_PATH"))
@@ -90,7 +93,7 @@ class ChatSession:
 class ChatHandler(Handler):
     chat_session = ChatSession(CHAT_CACHE_LENGTH, CHAT_CACHE_PATH)
 
-    def __init__(self, chat_id: str, role: SystemRole) -> None:
+    def __init__(self, chat_id: str, role: SystemRole, TTS=True) -> None:
         super().__init__(role)
         self.chat_id = chat_id
         self.role = role
@@ -100,6 +103,26 @@ class ChatHandler(Handler):
             self.chat_session.invalidate(chat_id)
 
         self.validate()
+
+        self.TTS = TTS
+
+        if self.TTS:
+
+            location = site.getsitepackages()[0]
+            location = '/D/TTS/'
+            path = location + "/TTS/.models.json"
+            os.makedirs(path, exist_ok=True)
+            model_manager = ModelManager(path)
+            model_path, config_path, model_item = model_manager.download_model("tts_models/en/ljspeech/tacotron2-DDC")
+            voc_path, voc_config_path, _ = model_manager.download_model(model_item["default_vocoder"])
+
+            synthesizer = Synthesizer(
+                tts_checkpoint=model_path,
+                tts_config_path=config_path,
+                vocoder_checkpoint=voc_path,
+                vocoder_config=voc_config_path
+            )
+
 
     @classmethod
     def list_ids(cls, value: str) -> None:
@@ -177,3 +200,15 @@ class ChatHandler(Handler):
         **kwargs: Any,
     ) -> Generator[str, None, None]:
         yield from super().get_completion(**kwargs)
+
+    def handle(self, prompt: str, **kwargs: Any) -> str:
+        messages = self.make_messages(self.make_prompt(prompt))
+        full_completion = ""
+        stream = cfg.get("DISABLE_STREAMING") == "false"
+        if not stream:
+            typer.echo("Loading...\r", nl=False)
+        for word in self.get_completion(messages=messages, **kwargs):
+            typer.secho(word, fg=self.color, bold=True, nl=False)
+            full_completion += word
+        typer.echo("\033[K" if not stream else "")  # Overwrite "loading..."
+        return full_completion
